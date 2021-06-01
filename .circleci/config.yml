@@ -1,0 +1,56 @@
+version: 2.1
+
+orbs:
+  docker: banzaicloud/docker@0.0.5
+
+workflows:
+  version: 2
+  ci:
+    jobs:
+      - docker/build:
+          name: Build docker image
+          executor: docker/machine-dlc
+          image: banzaicloud/k8s-sidecar
+          tag: ${CIRCLE_BRANCH//\//-}
+          filters:
+            tags:
+              ignore: /.*/
+
+      - docker/custom-publish:
+          name: Publish tagged & latest docker image
+          executor: docker/machine-dlc
+          context:
+          - dockerhub
+          - github
+          image: banzaicloud/k8s-sidecar
+          login:
+            - docker/login
+            - docker/ghcr-login
+          push:
+            - docker/push:
+                registry: docker.io
+                image: banzaicloud/k8s-sidecar
+                tag: ${CIRCLE_TAG//\//_}
+            - docker/push:
+                registry: ghcr.io
+                image: banzaicloud/k8s-sidecar
+                tag: ${CIRCLE_TAG//\//_}
+            - docker/conditional-push:
+                registry: docker.io
+                image: banzaicloud/k8s-sidecar
+                tag: latest
+                condition-steps:
+                  - docker/version-check:
+                      version: ${CIRCLE_TAG//\//_}
+            - docker/conditional-push:
+                registry: ghcr.io
+                image: banzaicloud/k8s-sidecar
+                tag: latest
+                condition-steps:
+                  - docker/version-check:
+                      version: ${CIRCLE_TAG//\//_}
+          filters:
+            tags:
+              only: /^v?[0-9]+\.[0-9]+\.[0-9]+-bzc(?:-(?:dev|rc|alpha|beta)\.[0-9]+)?$/
+            branches:
+              ignore: /.*/
